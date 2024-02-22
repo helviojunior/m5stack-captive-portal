@@ -7,6 +7,7 @@
 
 * [X] Microsoft portal `Enabled`
 * [X] Google portal `Enabled`
+* [X] Facebook portal `Enabled`
 * [X] Default SSID: `Free Wifi`
 
 You can change this default parameters throught URL http://127.0.0.1/config

